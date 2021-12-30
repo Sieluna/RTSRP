@@ -53,6 +53,8 @@ before reading this article, it’s recommended to first go through the tutorial
 The core algorithms are covered there, and this document focuses on translating
 those concepts into Unity's environment.
 
+![Effect](Images/9_Final1.png)
+
 ### Setting Up the Environment
 
 This implementation is based on Unity 2020+ with integrated DXR, requiring basic
@@ -94,20 +96,20 @@ To begin, follow these steps:
 
 2. Open the created shader and replace its content with the following code:
 
-```glsl
-#pragma max_recursion_depth 1
-
-RWTexture2D<float4> _OutputTarget;
-
-[shader("raygeneration")]
-void OutputColorRayGenShader()
-{
-  uint2 dispatchIdx = DispatchRaysIndex().xy;
-  uint2 dispatchDim = DispatchRaysDimensions().xy;
-
-  _OutputTarget[dispatchIdx] = float4((float)dispatchIdx.x / dispatchDim.x, (float)dispatchIdx.y / dispatchDim.y, 0.2f, 1.0f);
-}
-```
+   ```glsl
+   #pragma max_recursion_depth 1
+   
+   RWTexture2D<float4> _OutputTarget;
+   
+   [shader("raygeneration")]
+   void OutputColorRayGenShader()
+   {
+     uint2 dispatchIdx = DispatchRaysIndex().xy;
+     uint2 dispatchDim = DispatchRaysDimensions().xy;
+   
+     _OutputTarget[dispatchIdx] = float4((float)dispatchIdx.x / dispatchDim.x, (float)dispatchIdx.y / dispatchDim.y, 0.2f, 1.0f);
+   }
+   ```
 
 This shader will generate an image where the red (R) and green (G) channels
 change smoothly from 0 to 1 based on the pixel's horizontal and vertical
@@ -240,7 +242,6 @@ Once these parameters are set, we can dispatch the rays to generate the
 background image. Just like before, we use a **Blit** operation to display the
 final output on the screen.
 
-
 ```csharp
 var outputTarget = RequireOutputTarget(camera);
 
@@ -337,6 +338,7 @@ For detailed usage, please refer to the
   *Direction* as the ray’s direction, *TMin* as the minimum value of t, and
   *TMax* as the maximum value of t (in the code, it is set to the camera's far
   clipping distance).
+
 * **RayIntersection** is a user-defined Ray Payload structure that is used to
   pass data during ray tracing. In this case, the *color* field is used to store
   the result of the ray trace.
@@ -392,13 +394,13 @@ The **ClosestHitShader** accepts two parameters:
 
 1. **rayIntersection**, which carries the Ray Payload data passed from the ray
    generation shader.
+
 2. **attributeData**, which contains intersection data, although it is not used
    in this example. The shader simply returns a predefined color.
 
 ### 3.3. Rendering in C# using the SRP Pipeline
 
-Setting the camera parameters in C# follows the same approach as in section 3.
-
+Setting the camera parameters in C# follows the same approach as in section 2.
 The following C# code is used in the SRP pipeline:
 
 ```csharp
@@ -490,12 +492,15 @@ void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, Att
 * **UnityRayTracingFetchTriangleIndices** is a Unity utility function used to
   obtain the indices of the triangle that the ray intersects, based on the index
   information returned by *PrimitiveIndex*.
+
 * The **IntersectionVertex** structure defines the vertex information of the
   intersected triangle that we are interested in during ray tracing
+
 * The **FetchIntersectionVertex** function populates the *IntersectionVertex*
   data by internally calling the *UnityRayTracingFetchVertexAttribute3* function,
   a Unity utility function, to retrieve the vertex data. In this case, the
   Object Space normal of the vertex is obtained.
+
 * **INTERPOLATE_RAYTRACING_ATTRIBUTE** is used to interpolate between the three
   vertices of the intersected triangle to compute the intersection point’s data.
 
@@ -509,12 +514,12 @@ void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, Att
 
 **Scene File**: AntialiasingTutorialScene
 
-When zooming in on the final output image from section 4, you can observe
-significant aliasing issues.
+When zooming into the output from section 4, noticeable aliasing issues can be
+seen.
 
 ![Before Antialiasing](Images/5_Antialiasing1.png)
 
-In this example, the Accumulate Average Sample method is used instead.
+The Accumulate Average Sample method is used to mitigate this issue.
 
 ### 5.1. Create a RayTraceShader in Unity
 
@@ -578,13 +583,13 @@ void AntialiasingRayGenShader()
 }
 ```
 
-The GenerateCameraRayWithOffset function applies an offset to the ray generated
-for the pixel, with the offset value provided by GetRandomValue.
+* The **GenerateCameraRayWithOffset** function applies an offset to the ray
+  generated for the pixel, with the offset value provided by **GetRandomValue**.
 
-The _FrameIndex represents the index of the current frame being rendered. If
-this value is greater than 1, the current frame data is averaged with previous
-frames; otherwise, the current frame data is directly written to the render
-target.
+* The *_FrameIndex* represents the index of the current frame being rendered. If
+  this value is greater than 1, the current frame data is averaged with previous
+  frames; otherwise, the current frame data is directly written to the render
+  target.
 
 ### 5.2. Rendering in C# using the SRP Pipeline
 
@@ -627,14 +632,14 @@ finally
 }
 ```
 
-The **RequireOutputTargetSize** function retrieves the current render target's
-size.
+* The **RequireOutputTargetSize** function retrieves the current render target's
+  size.
 
-The **RequirePRNGStates** function retrieves the buffer for the random number
-generator state.
+* The **RequirePRNGStates** function retrieves the buffer for the random number
+  generator state.
 
-The **_frameIndex** indicates the index of the current frame being rendered.
-Rendering stops after accumulating 1000 frames.
+* The **_frameIndex** indicates the index of the current frame being rendered.
+  Rendering stops after accumulating 1000 frames.
 
 ### 5.3. Final Output
 
@@ -651,9 +656,9 @@ For the implementation of Diffuse, refer to the original text.
 ### 6.1. Create a RayTraceShader in Unity
 
 The code is mostly the same as the previous section, with the addition of the
-remainingDepth field in the Ray Payload to track how many recursions remain.
-The maximum recursion count is set by MAX_DEPTH. The value of MAX_DEPTH must be
-less than max_recursion_depth minus 1.
+**remainingDepth** field in the Ray Payload to track how many recursions remain.
+The maximum recursion count is set by _MAX_DEPTH_, which must be less than the
+shader’s recursion depth.
 
 ```glsl
 RayIntersection rayIntersection;
@@ -713,15 +718,12 @@ void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, Att
 }
 ```
 
-The method for calculating normalWS (world-space normal) is the same as in the
-previous section and is omitted here.
+* If *rayIntersection.remainingDepth* is greater than 0, the Diffuse calculation
+  is performed using the method from the original text, and TraceRay is called
+  again for recursive ray tracing.
 
-If rayIntersection.remainingDepth is greater than 0, the Diffuse calculation is
-performed using the method from the original text, and TraceRay is called again
-for recursive ray tracing.
-
-The GetRandomOnUnitSphere function returns a randomly distributed vector on the
-unit sphere.
+* The **GetRandomOnUnitSphere** function returns a randomly distributed vector
+  on the unit sphere.
 
 ### 6.3. Final Output
 
@@ -814,14 +816,10 @@ void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, Att
 
 **_IOR** represents the material’s index of refraction.
 
-The main difference between this and the Diffuse material is in the calculation
-of reflection and refraction rays. For details on these algorithms, refer to the
-original text.
-
-In this case, the second argument of TraceRay is changed to RAY_FLAG_NONE, since
-the refracted ray needs to intersect with the back side of the triangles after
-entering the object. Therefore, RAY_FLAG_CULL_BACK_FACING_TRIANGLES is no longer
-used.
+* In this case, the second argument of TraceRay is changed to **RAY_FLAG_NONE**,
+  since the refracted ray needs to intersect with the back side of the triangles
+  after entering the object. Therefore, **RAY_FLAG_CULL_BACK_FACING_TRIANGLES**
+  is no longer used.
 
 ### 7.2. Final Output
 
@@ -873,10 +871,22 @@ cmd.SetRayTracingVectorParam(m_Shader, s_OutputTargetSize, outputTargetSize);
 cmd.DispatchRays(m_Shader, "CameraRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
 ```
 
+* **_FocusCameraLeftBottomCorner** uniform passes the world-space coordinates of
+  the camera's film plane's bottom-left corner to the RayTrace Shader.
+
+* **_FocusCameraRight** and **_FocusCameraUp** uniforms pass the camera's right
+  and up vectors in world space to the RayTrace Shader.
+
+* **_FocusCameraSize** uniform passes the size of the camera's film plane in
+  world space to the RayTrace Shader.
+
+* **_FocusCameraHalfAperture** uniform passes half of the aperture size to the
+  RayTrace Shader.
+
 ### 8.2. RayTrace Shader
 
 The RayTrace Shader is similar to the one from the previous sections, except
-that _GenerateCameraRayWithOffset_ is replaced with GenerateFocusCameraRayWithOffset.
+that _GenerateCameraRayWithOffset_ is replaced with _GenerateFocusCameraRayWithOffset_.
 
 ```glsl
 inline void GenerateFocusCameraRayWithOffset(out float3 origin, out float3 direction, float2 apertureOffset, float2 offset)
