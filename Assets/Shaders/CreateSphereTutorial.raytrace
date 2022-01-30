@@ -11,7 +11,7 @@ inline float3 BackgroundColor(float3 origin, float3 direction)
 }
 
 [shader("raygeneration")]
-void AddASphereRayGenShader()
+void CreateSphereRayGenShader()
 {
     const uint2 dispatchIdx = DispatchRaysIndex().xy;
 

@@ -25,6 +25,9 @@ Unity RTX On!
     - [3.2. Creating the Sphere Shader](#32-creating-the-sphere-shader)
     - [3.3. Rendering in C# using the SRP Pipeline](#33-rendering-in-c-using-the-srp-pipeline)
     - [3.4. Final Output](#34-final-output)
+  - [4. Rendering the normal](#4-rendering-the-normal)
+     - [4.1. Creating the Sphere Shader](#41-creating-the-sphere-shader)
+     - [4.2. Final Output](#42-final-output)
 
 ## Overview
 
@@ -241,9 +244,9 @@ Here is the resulting image:
 
 ## 3. Rendering a Sphere
 
-**Tutorial Class**: AddASphereTutorial
+**Tutorial Class**: CreateSphereTutorial
 
-**Scene File**: AddASphereTutorialScene
+**Scene File**: CreateTutorialScene
 
 This section demonstrates how to render a sphere using ray tracing. Note that
 since Unity's current DXR integration does not support the Intersection Shader,
@@ -373,7 +376,7 @@ var outputTarget = RequireOutputTarget(camera);
 
 var accelerationStructure = m_Pipeline.AccelerationStructure;
 
-var cmd = CommandBufferPool.Get(nameof(AddASphereTutorial));
+var cmd = CommandBufferPool.Get(nameof(CreateSphereTutorial));
 try
 {
   using (new ProfilingSample(cmd, "RayTracing"))
@@ -381,7 +384,7 @@ try
     cmd.SetRayTracingShaderPass(m_Shader, "RayTracing");
     cmd.SetRayTracingAccelerationStructure(m_Shader, RayTracingRenderPipeline.s_AccelerationStructure, accelerationStructure);
     cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
-    cmd.DispatchRays(m_Shader, "AddASphereRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+    cmd.DispatchRays(m_Shader, "CreateSphereRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
   }
   context.ExecuteCommandBuffer(cmd);
 
@@ -397,7 +400,94 @@ finally
 }
 ```
 
-### 3.4 Final Output
+### 3.4. Final Output
 
 ![Sphere](Images/3_AddASphere1.png)
+
+## 4. Rendering the normal
+
+**Tutorial Class**: CreateSphereTutorial
+
+**Scene File**: SurfaceNormalTutorialScene
+
+This section is a modification of the routine from section 4, with the only
+change being the shader for the object itself.
+
+### 4.1. Creating the Sphere Shader
+
+```glsl
+struct RayIntersection
+{
+  uint4 PRNGStates;
+  float4 color;
+};
+
+inline void GenerateCameraRayWithOffset(out float3 origin, out float3 direction, float2 offset)
+{
+  float2 xy = DispatchRaysIndex().xy + offset;
+  float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0f - 1.0f;
+
+  // Un project the pixel coordinate into a ray.
+  float4 world = mul(_InvCameraViewProj, float4(screenPos, 0, 1));
+
+  world.xyz /= world.w;
+  origin = _WorldSpaceCameraPos.xyz;
+  direction = normalize(world.xyz - origin);
+}
+
+[shader("raygeneration")]
+void AntialiasingRayGenShader()
+{
+  const uint2 dispatchIdx = DispatchRaysIndex().xy;
+  const uint PRNGIndex = dispatchIdx.y * (int)_OutputTargetSize.x + dispatchIdx.x;
+  uint4 PRNGStates = _PRNGStates[PRNGIndex];
+
+  float4 finalColor = float4(0, 0, 0, 0);
+  {
+    float3 origin;
+    float3 direction;
+    float2 offset = float2(GetRandomValue(PRNGStates), GetRandomValue(PRNGStates));
+    GenerateCameraRayWithOffset(origin, direction, offset);
+
+    RayDesc rayDescriptor;
+    rayDescriptor.Origin = origin;
+    rayDescriptor.Direction = direction;
+    rayDescriptor.TMin = 1e-5f;
+    rayDescriptor.TMax = _CameraFarDistance;
+
+    RayIntersection rayIntersection;
+    rayIntersection.PRNGStates = PRNGStates;
+    rayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, rayIntersection);
+    PRNGStates = rayIntersection.PRNGStates;
+    finalColor += rayIntersection.color;
+  }
+
+  _PRNGStates[PRNGIndex] = PRNGStates;
+  if (_FrameIndex > 1)
+  {
+    float a = 1.0f / (float)_FrameIndex;
+    finalColor = _OutputTarget[dispatchIdx] * (1.0f - a) + finalColor * a;
+  }
+
+  _OutputTarget[dispatchIdx] = finalColor;
+}
+```
+
+* **UnityRayTracingFetchTriangleIndices** is a Unity utility function used to
+  obtain the indices of the triangle that the ray intersects, based on the index
+  information returned by *PrimitiveIndex*.
+* The **IntersectionVertex** structure defines the vertex information of the
+  intersected triangle that we are interested in during ray tracing
+* The **FetchIntersectionVertex** function populates the *IntersectionVertex*
+  data by internally calling the *UnityRayTracingFetchVertexAttribute3* function,
+  a Unity utility function, to retrieve the vertex data. In this case, the
+  Object Space normal of the vertex is obtained.
+* **INTERPOLATE_RAYTRACING_ATTRIBUTE** is used to interpolate between the three
+  vertices of the intersected triangle to compute the intersection point’s data.
+
+### 4.2. Final Output
+
+![Normal Sphere](Images/4_NormalAsColor1.png)
 

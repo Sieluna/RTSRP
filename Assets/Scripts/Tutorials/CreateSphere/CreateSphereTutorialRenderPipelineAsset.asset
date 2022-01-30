@@ -10,6 +10,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4ad849d2f2484497b25b79034ab1c15b, type: 3}
-  m_Name: AddASphereTutorialRenderPipelineAsset
+  m_Name: CreateSphereTutorialRenderPipelineAsset
   m_EditorClassIdentifier: 
   TutorialAsset: {fileID: 11400000, guid: 40097d6f302379d4e9078c0265fc83c8, type: 2}

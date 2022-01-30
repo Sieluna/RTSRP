@@ -1,9 +1,9 @@
 ﻿using UnityEngine;
 using UnityEngine.Rendering;
 
-public class AddASphereTutorial : RayTracingTutorial
+public class CreateSphereTutorial : RayTracingTutorial
 {
-    public AddASphereTutorial(RayTracingTutorialAsset asset) : base(asset) { }
+    public CreateSphereTutorial(RayTracingTutorialAsset asset) : base(asset) { }
 
     public override void Render(ScriptableRenderContext context, Camera camera)
     {
@@ -12,7 +12,7 @@ public class AddASphereTutorial : RayTracingTutorial
 
         var accelerationStructure = m_Pipeline.AccelerationStructure;
 
-        var cmd = CommandBufferPool.Get(nameof(OutputColorTutorial));
+        var cmd = CommandBufferPool.Get(nameof(CreateSphereTutorial));
         try
         {
             using (new ProfilingScope(cmd, new ProfilingSampler("RayTracing")))
@@ -20,7 +20,7 @@ public class AddASphereTutorial : RayTracingTutorial
                 cmd.SetRayTracingShaderPass(m_Shader, "RayTracing");
                 cmd.SetRayTracingAccelerationStructure(m_Shader, RayTracingRenderPipeline.s_AccelerationStructure, accelerationStructure);
                 cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
-                cmd.DispatchRays(m_Shader, "AddASphereRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+                cmd.DispatchRays(m_Shader, "CreateSphereRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
             }
 
             context.ExecuteCommandBuffer(cmd);

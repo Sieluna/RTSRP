@@ -10,6 +10,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d49372cb9a766342b6d0fd91c777b2a, type: 3}
-  m_Name: AddASphereTutorialAsset
+  m_Name: CreateSphereTutorialAsset
   m_EditorClassIdentifier: 
-  Shader: {fileID: 4807578003741378534, guid: 84c405f3d84b07e4db69e0294c3a9623, type: 3}
+  Shader: {fileID: 4807578003741378534, guid: 058286ab16aa7cd408ca35ca34bb3d2b, type: 3}
