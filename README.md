@@ -19,7 +19,12 @@ Unity RTX On!
   - [2. Outputting the Background](#2-outputting-the-background)
     - [2.1. Create a RayTraceShader in Unity](#21-creating-a-raytraceshader-in-unity)
     - [2.2. Rendering in C# using the SRP Pipeline](#22-rendering-in-c-using-the-srp-pipeline)
-    - [2.3. Final Output](#23-final-output) 
+    - [2.3. Final Output](#23-final-output)
+  - [3. Rendering a Sphere](#3-rendering-a-sphere)
+    - [3.1. Create a RayTraceShader in Unity](#31-creating-a-raytraceshader-in-unity)
+    - [3.2. Creating the Sphere Shader](#32-creating-the-sphere-shader)
+    - [3.3. Rendering in C# using the SRP Pipeline](#33-rendering-in-c-using-the-srp-pipeline)
+    - [3.4. Final Output](#34-final-output)
 
 ## Overview
 
@@ -93,13 +98,13 @@ The following C# code integrates the shader into Unity's render pipeline:
 ```csharp
 var outputTarget = RequireOutputTarget(camera);
 
-var cmd = CommandBufferPool.Get(typeof(OutputColorTutorial).Name);
+var cmd = CommandBufferPool.Get(nameof(OutputColorTutorial));
 try
 {
   using (new ProfilingSample(cmd, "RayTracing"))
   {
-    cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
-    cmd.DispatchRays(_shader, "OutputColorRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+    cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
+    cmd.DispatchRays(m_Shader, "OutputColorRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
   }
   context.ExecuteCommandBuffer(cmd);
 
@@ -119,8 +124,8 @@ finally
   output.
 
 * **cmd.SetRayTracingTextureParam** sets the render target for the Ray Trace
-  Shader. Here, *_shader* refers to the Ray Tracing Shader Program, and
-  *_outputTarget* is obtained via `Shader.PropertyToID("_OutputTarget")`.
+  Shader. Here, *m_Shader* refers to the Ray Tracing Shader Program, and
+  *s_OutputTarget* is obtained via `Shader.PropertyToID("_OutputTarget")`.
 
 * **cmd.DispatchRays** invokes the ray generation function `OutputColorRayGenShader`
   in the RayTrace Shader for Ray Tracing.
@@ -140,7 +145,7 @@ After setting everything up, running the code should produce the following image
 
 **Scene file**: BackgroundTutorialScene
 
-In this tutorial, we will render a gradient background using Ray Tracing.
+In this section, we will render a gradient background using Ray Tracing.
 
 ### 2.1. Creating a RayTraceShader in Unity
 
@@ -204,13 +209,13 @@ The SRP pipeline integration is as follows:
 ```csharp
 var outputTarget = RequireOutputTarget(camera);
 
-var cmd = CommandBufferPool.Get(typeof(OutputColorTutorial).Name);
+var cmd = CommandBufferPool.Get(nameof(BackgroundTutorial));
 try
 {
   using (new ProfilingSample(cmd, "RayTracing"))
   {
-    cmd.SetRayTracingTextureParam(_shader, _outputTargetShaderId, outputTarget);
-    cmd.DispatchRays(_shader, "BackgroundRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+    cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
+    cmd.DispatchRays(m_Shader, "BackgroundRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
   }
   context.ExecuteCommandBuffer(cmd);
 
@@ -233,4 +238,166 @@ The difference here is the invocation of a different Ray Trace Shader.
 Here is the resulting image:
 
 ![Background](Images/2_Background1.png)
+
+## 3. Rendering a Sphere
+
+**Tutorial Class**: AddASphereTutorial
+
+**Scene File**: AddASphereTutorialScene
+
+This section demonstrates how to render a sphere using ray tracing. Note that
+since Unity's current DXR integration does not support the Intersection Shader,
+we cannot use procedural geometry as in the original text. Instead, we will use
+a sphere mesh for rendering.
+
+### 3.1. Creating a RayTraceShader in Unity
+
+```glsl
+struct RayIntersection
+{
+  float4 color;
+};
+
+inline float3 BackgroundColor(float3 origin, float3 direction)
+{
+  float t = 0.5f * (direction.y + 1.0f);
+  return (1.0f - t) * float3(1.0f, 1.0f, 1.0f) + t * float3(0.5f, 0.7f, 1.0f);
+}
+
+[shader("raygeneration")]
+void AddASphereRayGenShader()
+{
+  const uint2 dispatchIdx = DispatchRaysIndex().xy;
+
+  float3 origin;
+  float3 direction;
+  GenerateCameraRay(origin, direction);
+
+  RayDesc rayDescriptor;
+  rayDescriptor.Origin = origin;
+  rayDescriptor.Direction = direction;
+  rayDescriptor.TMin = 1e-5f;
+  rayDescriptor.TMax = _CameraFarDistance;
+
+  RayIntersection rayIntersection;
+  rayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+  TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, rayIntersection);
+
+  _OutputTarget[dispatchIdx] = rayIntersection.color;
+}
+
+[shader("miss")]
+void MissShader(inout RayIntersection rayIntersection : SV_RayPayload)
+{
+  float3 origin = WorldRayOrigin();
+  float3 direction = WorldRayDirection();
+  rayIntersection.color = float4(BackgroundColor(origin, direction), 1.0f);
+}
+```
+
+In the **ray generation shader**, the `TraceRay` function is used to cast rays.
+For detailed usage, please refer to the
+[Microsoft DXR documentation](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#hit-groups).
+
+* **RayDesc** describes the ray, with *Origin* as the starting point of the ray,
+  *Direction* as the ray’s direction, *TMin* as the minimum value of t, and
+  *TMax* as the maximum value of t (in the code, it is set to the camera's far
+  clipping distance).
+* **RayIntersection** is a user-defined Ray Payload structure that is used to
+  pass data during ray tracing. In this case, the *color* field is used to store
+  the result of the ray trace.
+
+Additionally, we have included a **miss shader**, which is executed when no ray
+intersections are detected. In this shader, we call the *BackgroundColor*
+function to return the gradient background color defined in section 3.
+
+### 3.2. Creating the Sphere Shader
+
+Create a surface shader file in Unity and add the following code at the end.
+
+```glsl
+SubShader
+{
+  Pass
+  {
+    Name "RayTracing"
+    Tags { "LightMode" = "RayTracing" }
+
+    HLSLPROGRAM
+
+    #pragma raytracing test
+
+    struct RayIntersection
+    {
+      float4 color;
+    };
+
+    CBUFFER_START(UnityPerMaterial)
+    float4 _Color;
+    CBUFFER_END
+
+    [shader("closesthit")]
+    void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
+    {
+      rayIntersection.color = _Color;
+    }
+
+    ENDHLSL
+  }
+}
+```
+
+In this shader, we define a **SubShader** with a pass named "RayTracing." This
+name can be customized as needed. In the subsequent C# code, you will see how
+this pass is specifically referenced.
+
+The directive **#pragma raytracing test** indicates that this is a Ray Tracing
+pass.
+
+The **ClosestHitShader** accepts two parameters:
+
+1. **rayIntersection**, which carries the Ray Payload data passed from the ray
+   generation shader.
+2. **attributeData**, which contains intersection data, although it is not used
+   in this example. The shader simply returns a predefined color.
+
+### 3.3. Rendering in C# using the SRP Pipeline
+
+Setting the camera parameters in C# follows the same approach as in section 3.
+
+The following C# code is used in the SRP pipeline:
+
+```csharp
+var outputTarget = RequireOutputTarget(camera);
+
+var accelerationStructure = m_Pipeline.AccelerationStructure;
+
+var cmd = CommandBufferPool.Get(nameof(AddASphereTutorial));
+try
+{
+  using (new ProfilingSample(cmd, "RayTracing"))
+  {
+    cmd.SetRayTracingShaderPass(m_Shader, "RayTracing");
+    cmd.SetRayTracingAccelerationStructure(m_Shader, RayTracingRenderPipeline.s_AccelerationStructure, accelerationStructure);
+    cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
+    cmd.DispatchRays(m_Shader, "AddASphereRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+  }
+  context.ExecuteCommandBuffer(cmd);
+
+  using (new ProfilingSample(cmd, "FinalBlit"))
+  {
+    cmd.Blit(outputTarget, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
+  }
+  context.ExecuteCommandBuffer(cmd);
+}
+finally
+{
+  CommandBufferPool.Release(cmd);
+}
+```
+
+### 3.4 Final Output
+
+![Sphere](Images/3_AddASphere1.png)
 

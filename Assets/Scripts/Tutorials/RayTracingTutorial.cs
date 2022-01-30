@@ -24,9 +24,7 @@ public abstract class RayTracingTutorial
     public virtual bool Init(RayTracingRenderPipeline pipeline)
     {
         m_Pipeline = pipeline;
-
         m_Shader = m_Asset.Shader;
-
         return true;
     }
 

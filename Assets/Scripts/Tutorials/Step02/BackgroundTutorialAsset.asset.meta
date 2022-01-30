@@ -1,7 +1,8 @@
 fileFormatVersion: 2
-guid: 6e65f71ed2cb72244b8b2383fb98a920
-RayTracingShaderImporter:
+guid: 0a8753c53d3d32e4bbaad78bd57fb854
+NativeFormatImporter:
   externalObjects: {}
+  mainObjectFileID: 11400000
   userData: 
   assetBundleName: 
   assetBundleVariant: 

@@ -6,10 +6,14 @@ using UnityEngine.Rendering;
 
 public class RayTracingRenderPipeline : RenderPipeline
 {
+    public static readonly int s_AccelerationStructure = Shader.PropertyToID("_AccelerationStructure");
+
     private readonly RayTracingRenderPipelineAsset m_Asset;
     private readonly Dictionary<int, ComputeBuffer> m_PRNGStates = new();
     private RayTracingAccelerationStructure m_AccelerationStructure;
     private RayTracingTutorial m_Tutorial;
+
+    public RayTracingAccelerationStructure AccelerationStructure => m_AccelerationStructure;
 
     public RayTracingRenderPipeline(RayTracingRenderPipelineAsset asset)
     {
@@ -34,7 +38,7 @@ public class RayTracingRenderPipeline : RenderPipeline
     {
         if (!SystemInfo.supportsRayTracing)
         {
-            Debug.LogError("You system is not support ray tracing. Please check your graphic API is D3D12 and os is Windows 10.");
+            Debug.LogError("You system is not support ray tracing. Please check your graphic API is D3D12.");
             return;
         }
 
