@@ -1,5 +1,5 @@
 目录：
-- [GPU Ray Tracing in One Weekend by Unity 2019.3](#gpu-ray-tracing-in-one-weekend-by-unity-20193)
+- [GPU Ray Tracing](#)
 - [1. 综述](#1-%e7%bb%bc%e8%bf%b0)
   - [1.1. 准备工作环境](#11-%e5%87%86%e5%a4%87%e5%b7%a5%e4%bd%9c%e7%8e%af%e5%a2%83)
   - [1.2. 利用SPR调用DXR](#12-%e5%88%a9%e7%94%a8spr%e8%b0%83%e7%94%a8dxr)
@@ -38,10 +38,10 @@
 - [10. 全部放到一起](#10-%e5%85%a8%e9%83%a8%e6%94%be%e5%88%b0%e4%b8%80%e8%b5%b7)
 
 # 1. 综述
-本文基于 [https://raytracing.github.io]() 的《Ray Tracing in One Weekend》，介绍如何使用Unity 2019.3、SRP和DXR实现Ray Tracing。
+本文基于 [https://raytracing.github.io/books/RayTracingInOneWeekend.html]() 的《Ray Tracing in One Weekend》，介绍如何使用Unity SRP和DXR实现Ray Tracing。
 因此在阅读本文之前，需要首先阅读《Ray Tracing in One Weekend》。本文不会对《Ray Tracing in One Weekend》文中已经解释清楚的算法做重复解释。本文中提到的“原文”均指“Ray Tracing in One Weekend”。
 
-本文的重点放在如何在Unity 2019.3中实现同原文一样的Ray Tracing渲染。
+本文的重点放在如何在Unity中实现同原文一样的Ray Tracing渲染。
 
 ![avatar](images/10_Final1.png)
 
@@ -797,6 +797,5 @@ GenerateFocusCameraRayWithOffset(origin, direction, apertureOffset, offset);
 ![avatar](images/9_FocusCamera1.png)
 
 # 10. 全部放到一起
-源代码：[https://github.com/zhing2006/GPU-Ray-Tracing-in-One-Weekend-by-Unity-2019.3](https://github.com/zhing2006/GPU-Ray-Tracing-in-One-Weekend-by-Unity-2019.3)
 ![avatar](images/10_Final1.png)
 ![avatar](images/10_Final2.png)
