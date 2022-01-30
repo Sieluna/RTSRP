@@ -21,48 +21,48 @@ RaytracingAccelerationStructure _AccelerationStructure;
 
 struct RayIntersection
 {
-  int remainingDepth;
-  uint4 PRNGStates;
-  float4 color;
+    int remainingDepth;
+    uint4 PRNGStates;
+    float4 color;
 };
 
 struct AttributeData
 {
-  float2 barycentrics;
+    float2 barycentrics;
 };
 
 inline void GenerateCameraRay(out float3 origin, out float3 direction)
 {
-  float2 xy = DispatchRaysIndex().xy + 0.5f; // center in the middle of the pixel.
-  float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0f - 1.0f;
+    float2 xy = DispatchRaysIndex().xy + 0.5f; // center in the middle of the pixel.
+    float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0f - 1.0f;
 
-  // Un project the pixel coordinate into a ray.
-  float4 world = mul(_InvCameraViewProj, float4(screenPos, 0, 1));
+    // Un project the pixel coordinate into a ray.
+    float4 world = mul(_InvCameraViewProj, float4(screenPos, 0, 1));
 
-  world.xyz /= world.w;
-  origin = _WorldSpaceCameraPos.xyz;
-  direction = normalize(world.xyz - origin);
+    world.xyz /= world.w;
+    origin = _WorldSpaceCameraPos.xyz;
+    direction = normalize(world.xyz - origin);
 }
 
 inline void GenerateCameraRayWithOffset(out float3 origin, out float3 direction, float2 offset)
 {
-  float2 xy = DispatchRaysIndex().xy + offset;
-  float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0f - 1.0f;
+    float2 xy = DispatchRaysIndex().xy + offset;
+    float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0f - 1.0f;
 
-  // Un project the pixel coordinate into a ray.
-  float4 world = mul(_InvCameraViewProj, float4(screenPos, 0, 1));
+    // Un project the pixel coordinate into a ray.
+    float4 world = mul(_InvCameraViewProj, float4(screenPos, 0, 1));
 
-  world.xyz /= world.w;
-  origin = _WorldSpaceCameraPos.xyz;
-  direction = normalize(world.xyz - origin);
+    world.xyz /= world.w;
+    origin = _WorldSpaceCameraPos.xyz;
+    direction = normalize(world.xyz - origin);
 }
 
 inline void GenerateFocusCameraRayWithOffset(out float3 origin, out float3 direction, float2 apertureOffset, float2 offset)
 {
-  float2 xy = DispatchRaysIndex().xy + offset;
-  float2 uv = xy / DispatchRaysDimensions().xy;
+    float2 xy = DispatchRaysIndex().xy + offset;
+    float2 uv = xy / DispatchRaysDimensions().xy;
 
-  float3 world = _FocusCameraLeftBottomCorner + uv.x * _FocusCameraSize.x * _FocusCameraRight + uv.y * _FocusCameraSize.y * _FocusCameraUp;
-  origin = _WorldSpaceCameraPos.xyz + _FocusCameraHalfAperture * apertureOffset.x * _FocusCameraRight + _FocusCameraHalfAperture * apertureOffset.y * _FocusCameraUp;
-  direction = normalize(world.xyz - origin);
+    float3 world = _FocusCameraLeftBottomCorner + uv.x * _FocusCameraSize.x * _FocusCameraRight + uv.y * _FocusCameraSize.y * _FocusCameraUp;
+    origin = _WorldSpaceCameraPos.xyz + _FocusCameraHalfAperture * apertureOffset.x * _FocusCameraRight + _FocusCameraHalfAperture * apertureOffset.y * _FocusCameraUp;
+    direction = normalize(world.xyz - origin);
 }
