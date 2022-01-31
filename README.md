@@ -10,8 +10,8 @@ Unity RTX On!
 
 - [GPU Ray Tracing](#)
   - [Overview](#overview)
-     - [Setting Up the Environment](#setting-up-the-environment)
-     - [Import the Dependencies](#import-the-dependencies)
+    - [Setting Up the Environment](#setting-up-the-environment)
+    - [Import the Dependencies](#import-the-dependencies)
   - [1. Outputting an Image](#1-outputting-an-image)
     - [1.1. Create a RayTraceShader in Unity](#11-create-a-raytraceshader-in-unity)
     - [1.2. Rendering in C# using the SRP Pipeline](#12-rendering-in-c-using-the-srp-pipeline)
@@ -36,14 +36,22 @@ Unity RTX On!
     - [6.1. Create a RayTraceShader in Unity](#61-create-a-raytraceshader-in-unity)
     - [6.2. Creating the Object Shader](#62-creating-the-object-shader)
     - [6.3. Final Output](#63-final-output)
+  - [7. Dielectric Material](#7-dielectric-material)
+    - [7.1. Object ClosestHitShader](#71-object-closesthitshader)
+    - [7.2. Final Output](#72-final-output)
+  - [8. Depth of Field Blur](#8-depth-of-field-blur)
+    - [8.1. C# Code](#81-c-code)
+    - [8.2. RayTrace Shader](#82-raytrace-shader)
+    - [8.3. Final Output](#83-final-output)
+  - [9. Bringing It All Together](#9-bringing-it-all-together)
 
 ## Overview
 
 This tutorial is based on [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 and explains how to implement Ray Tracing using Unity's SRP and DXR. Therefore,
 before reading this article, it’s recommended to first go through the tutorial.
-The algorithms are explained there, so this guide will focus on implementing Ray
-Tracing in Unity.
+The core algorithms are covered there, and this document focuses on translating
+those concepts into Unity's environment.
 
 ### Setting Up the Environment
 
@@ -52,7 +60,9 @@ configuration for the Unity project.
 
 ![Setup DX12](Images/0_SetupDX12.png)
 
-The first step is to set the Graphics API to Direct3D12.
+The first step is to configure Unity to use Direct3D12 by going to **Project
+Settings → Player → Other Settings**, and setting the **Graphics API** to
+**Direct3D12**.
 
 ### Import the Dependencies
 
@@ -67,17 +77,22 @@ Unity packages must be imported:
 
 **Scene file**: `OutputColorTutorialScene`
 
-Generating the coord image using Ray Tracing Shader is a great starting point
-for exploring its capabilities.
+A common starting point in ray tracing is to output an image based on pixel
+coordinates. This simple exercise allows us to explore the capabilities of ray
+tracing.
 
 ### 1.1. Create a RayTraceShader in Unity
 
-To create a Ray Trace Shader in Unity, follow these steps: In the `Project`
-panel, right click and select `Create → Shader → Ray Tracing Shader`.
+In this step, we create a simple RayTraceShader in Unity. This shader will
+calculate pixel values based on their coordinates and assign colors accordingly.
+To begin, follow these steps:
 
-![Create RayTraceShader](Images/1_OutputImage1.png)
+1. Right-click in the **Project** panel and select **Create → Shader → Ray
+   Tracing Shader**.
 
-Replace the content of the shader with the following code:
+   ![Create RayTraceShader](Images/1_OutputImage1.png)
+
+2. Open the created shader and replace its content with the following code:
 
 ```glsl
 #pragma max_recursion_depth 1
@@ -94,13 +109,13 @@ void OutputColorRayGenShader()
 }
 ```
 
+This shader will generate an image where the red (R) and green (G) channels
+change smoothly from 0 to 1 based on the pixel's horizontal and vertical
+position, respectively. The blue (B) channel remains constant across all pixels.
+
 * **DispatchRaysIndex().xy** returns the current pixel position.
 
 * **DispatchRaysDimensions().xy** returns the dimensions of the render target.
-
-This code adjusts the R and G channels of each pixel: the R channel ranges from
-0 to 1 from left to right, the G channel from 0 to 1 from bottom to top, while
-the B channel remains constant at 0.2 for all pixels.
 
 ### 1.2. Rendering in C# using the SRP Pipeline
 
@@ -131,6 +146,9 @@ finally
 }
 ```
 
+Since the Ray Trace Shader only renders to a render target, a **Blit** operation
+is required to display the result on the screen.
+
 * **RequireOutputTarget** retrieves the render target based on the camera's
   output.
 
@@ -138,11 +156,8 @@ finally
   Shader. Here, *m_Shader* refers to the Ray Tracing Shader Program, and
   *s_OutputTarget* is obtained via `Shader.PropertyToID("_OutputTarget")`.
 
-* **cmd.DispatchRays** invokes the ray generation function `OutputColorRayGenShader`
+* **cmd.DispatchRays** dispatches the ray generation function `OutputColorRayGenShader`
   in the RayTrace Shader for Ray Tracing.
-
-Since the Ray Trace Shader only renders to a render target, a Blit operation is
-required to display the result on the screen.
 
 ### 1.3. Final Output
 
@@ -156,7 +171,10 @@ After setting everything up, running the code should produce the following image
 
 **Scene file**: BackgroundTutorialScene
 
-In this section, we will render a gradient background using Ray Tracing.
+This section builds on the previous one by rendering a gradient background based
+on the direction of the rays. Instead of outputting simple coordinates, we will
+calculate the ray's direction and use that to generate a gradient color from the
+top to the bottom of the image.
 
 ### 2.1. Creating a RayTraceShader in Unity
 
@@ -196,15 +214,18 @@ void BackgroundRayGenShader()
 }
 ```
 
-* **GenerateCameraRay** calculates the origin and direction of the ray for the
-  current pixel.
+* **GenerateCameraRay** calculates the ray's origin and direction based on the
+  pixel's position in the camera's viewport.
 
 * The **Color** function calculates a gradient from top to bottom, creating the
   background effect.
 
 ### 2.2. Rendering in C# using the SRP Pipeline
 
-To set up the camera parameters in C#, use the following code:
+To render this background, we need to pass the camera's parameters to the
+RayTraceShader. This includes the camera's world-space position and the inverse
+view-projection matrix, which is used to transform the screen-space coordinates
+into world-space rays.
 
 ```csharp
 Shader.SetGlobalVector(CameraShaderParams._WorldSpaceCameraPos, camera.transform.position);
@@ -215,7 +236,10 @@ var invViewProjMatrix = Matrix4x4.Inverse(viewProjMatrix);
 Shader.SetGlobalMatrix(CameraShaderParams._InvCameraViewProj, invViewProjMatrix);
 ```
 
-The SRP pipeline integration is as follows:
+Once these parameters are set, we can dispatch the rays to generate the
+background image. Just like before, we use a **Blit** operation to display the
+final output on the screen.
+
 
 ```csharp
 var outputTarget = RequireOutputTarget(camera);
@@ -242,11 +266,9 @@ finally
 }
 ```
 
-The difference here is the invocation of a different Ray Trace Shader.
-
 ### 2.3. Final Output
 
-Here is the resulting image:
+The resulting image should appear as follows:
 
 ![Background](Images/2_Background1.png)
 
@@ -256,10 +278,10 @@ Here is the resulting image:
 
 **Scene File**: CreateTutorialScene
 
-This section demonstrates how to render a sphere using ray tracing. Note that
-since Unity's current DXR integration does not support the Intersection Shader,
-we cannot use procedural geometry as in the original text. Instead, we will use
-a sphere mesh for rendering.
+In this section, we extend the previous example by rendering a 3D sphere.
+Normally, in ray tracing, spheres can be represented mathematically using
+intersection shaders. However, due to Unity's lack of support for procedural
+geometry in DXR, we will use a pre-modeled sphere mesh instead.
 
 ### 3.1. Creating a RayTraceShader in Unity
 
@@ -410,6 +432,8 @@ finally
 
 ### 3.4. Final Output
 
+The resulting image should appear as follows:
+
 ![Sphere](Images/3_AddASphere1.png)
 
 ## 4. Rendering the normal
@@ -485,7 +509,7 @@ void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, Att
 
 **Scene File**: AntialiasingTutorialScene
 
-When zooming in on the final output image from section 5, you can observe
+When zooming in on the final output image from section 4, you can observe
 significant aliasing issues.
 
 ![Before Antialiasing](Images/5_Antialiasing1.png)
@@ -702,3 +726,187 @@ unit sphere.
 ### 6.3. Final Output
 
 ![Diffuse](Images/6_Diffuse1.png)
+
+## 7. Dielectric Material
+
+**Tutorial Class**: AntialiasingTutorial
+
+**Scene File**: DielectricsTutorialScene
+
+In the original text, a method with a negative radius is used to achieve a glass
+bubble effect. Since Unity doesn’t allow the use of an Intersection Shader, a
+new object shader called DielectricsInv was added to reverse the Normal in order
+to achieve the same effect.
+
+### 7.1. Object ClosestHitShader
+
+```glsl
+inline float schlick(float cosine, float IOR)
+{
+  float r0 = (1.0f - IOR) / (1.0f + IOR);
+  r0 = r0 * r0;
+  return r0 + (1.0f - r0) * pow((1.0f - cosine), 5.0f);
+}
+
+[shader("closesthit")]
+void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
+{
+  // Fetch the indices of the currentr triangle
+  // Fetch the 3 vertices
+  // Compute the full barycentric coordinates
+  // Get normal in world space.
+  ...
+  float3 normalWS = normalize(mul(objectToWorld, normalOS));
+
+  float4 color = float4(0, 0, 0, 1);
+  if (rayIntersection.remainingDepth > 0)
+  {
+    // Get position in world space.
+    ...
+    float3 positionWS = origin + direction * t;
+
+    // Make reflection & refraction ray.
+    float3 outwardNormal;
+    float niOverNt;
+    float reflectProb;
+    float cosine;
+    if (dot(-direction, normalWS) > 0.0f)
+    {
+      outwardNormal = normalWS;
+      niOverNt = 1.0f / _IOR;
+      cosine = _IOR * dot(-direction, normalWS);
+    }
+    else
+    {
+      outwardNormal = -normalWS;
+      niOverNt = _IOR;
+      cosine = -dot(-direction, normalWS);
+    }
+    reflectProb = schlick(cosine, _IOR);
+
+    float3 scatteredDir;
+    if (GetRandomValue(rayIntersection.PRNGStates) < reflectProb)
+      scatteredDir = reflect(direction, normalWS);
+    else
+      scatteredDir = refract(direction, outwardNormal, niOverNt);
+
+    RayDesc rayDescriptor;
+    rayDescriptor.Origin = positionWS + 1e-5f * scatteredDir;
+    rayDescriptor.Direction = scatteredDir;
+    rayDescriptor.TMin = 1e-5f;
+    rayDescriptor.TMax = _CameraFarDistance;
+
+    // Tracing reflection or refraction.
+    RayIntersection reflectionRayIntersection;
+    reflectionRayIntersection.remainingDepth = rayIntersection.remainingDepth - 1;
+    reflectionRayIntersection.PRNGStates = rayIntersection.PRNGStates;
+    reflectionRayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    TraceRay(_AccelerationStructure, RAY_FLAG_NONE, 0xFF, 0, 1, 0, rayDescriptor, reflectionRayIntersection);
+
+    rayIntersection.PRNGStates = reflectionRayIntersection.PRNGStates;
+    color = reflectionRayIntersection.color;
+  }
+
+  rayIntersection.color = _Color * color;
+}
+```
+
+**_IOR** represents the material’s index of refraction.
+
+The main difference between this and the Diffuse material is in the calculation
+of reflection and refraction rays. For details on these algorithms, refer to the
+original text.
+
+In this case, the second argument of TraceRay is changed to RAY_FLAG_NONE, since
+the refracted ray needs to intersect with the back side of the triangles after
+entering the object. Therefore, RAY_FLAG_CULL_BACK_FACING_TRIANGLES is no longer
+used.
+
+### 7.2. Final Output
+
+![Dielectrics](Images/7_Dielectrics1.png)
+
+## 8. Depth of Field Blur
+
+**Tutorial Class**: CameraTutorial
+
+**Scene File**: CameraTutorialScene
+
+For a detailed explanation of the algorithm, refer to the original text. Here,
+we focus on the DXR implementation.
+
+### 8.1. C# Code
+
+The **FocusCamera** class adds focusDistance and aperture parameters to the
+camera.
+
+```csharp
+thisCamera = GetComponent<Camera>();
+var theta = thisCamera.fieldOfView * Mathf.Deg2Rad;
+var halfHeight = math.tan(theta * 0.5f);
+var halfWidth = thisCamera.aspect * halfHeight;
+leftBottomCorner = transform.position + transform.forward * focusDistance -
+                   transform.right * focusDistance * halfWidth -
+                   transform.up * focusDistance * halfHeight;
+size = new Vector2(focusDistance * halfWidth * 2.0f, focusDistance * halfHeight * 2.0f);
+```
+
+* **leftBottomCorner** is the world-space coordinate of the camera’s film plane’s
+bottom-left corner.
+
+* **size** is the size of the camera’s film plane in world space.
+
+```csharp
+cmd.SetRayTracingVectorParam(m_Shader, s_FocusCameraLeftBottomCorner, focusCamera.LeftBottomCorner);
+cmd.SetRayTracingVectorParam(m_Shader, s_FocusCameraRight, focusCamera.transform.right);
+cmd.SetRayTracingVectorParam(m_Shader, s_FocusCameraUp, focusCamera.transform.up);
+cmd.SetRayTracingVectorParam(m_Shader, s_FocusCameraSize, focusCamera.Size);
+cmd.SetRayTracingFloatParam(m_Shader, s_FocusCameraHalfAperture, focusCamera.Aperture * 0.5f);
+
+cmd.SetRayTracingShaderPass(m_Shader, "RayTracing");
+cmd.SetRayTracingAccelerationStructure(m_Shader, RayTracingRenderPipeline.s_AccelerationStructure, accelerationStructure);
+cmd.SetRayTracingIntParam(m_Shader, s_FrameIndex, m_FrameIndex);
+cmd.SetRayTracingBufferParam(m_Shader, s_PRNGStates, PRNGStates);
+cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
+cmd.SetRayTracingVectorParam(m_Shader, s_OutputTargetSize, outputTargetSize);
+cmd.DispatchRays(m_Shader, "CameraRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+```
+
+### 8.2. RayTrace Shader
+
+The RayTrace Shader is similar to the one from the previous sections, except
+that _GenerateCameraRayWithOffset_ is replaced with GenerateFocusCameraRayWithOffset.
+
+```glsl
+inline void GenerateFocusCameraRayWithOffset(out float3 origin, out float3 direction, float2 apertureOffset, float2 offset)
+{
+  float2 xy = DispatchRaysIndex().xy + offset;
+  float2 uv = xy / DispatchRaysDimensions().xy;
+
+  float3 world = _FocusCameraLeftBottomCorner + uv.x * _FocusCameraSize.x * _FocusCameraRight + uv.y * _FocusCameraSize.y * _FocusCameraUp;
+  origin = _WorldSpaceCameraPos.xyz + _FocusCameraHalfAperture * apertureOffset.x * _FocusCameraRight + _FocusCameraHalfAperture * apertureOffset.y * _FocusCameraUp;
+  direction = normalize(world.xyz - origin);
+}
+
+float2 apertureOffset = GetRandomInUnitDisk(PRNGStates);
+float2 offset = float2(GetRandomValue(PRNGStates), GetRandomValue(PRNGStates));
+GenerateFocusCameraRayWithOffset(origin, direction, apertureOffset, offset);
+```
+
+The algorithm follows the same principles as in the original text, with some
+calculations moved to the C# stage (as shown in section 8.1).
+
+* The **apertureOffset** is generated by *GetRandomInUnitDisk*.
+
+* The **GetRandomInUnitDisk** function generates a uniformly distributed random
+  vector on a unit disk.
+
+### 8.3. Final Output
+
+![Focus Camera](Images/8_FocusCamera1.png)
+
+## 9. Bringing It All Together
+
+![Effect](Images/9_Final1.png)
+![Effect](Images/9_Final2.png)

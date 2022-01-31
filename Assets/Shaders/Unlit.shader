@@ -73,7 +73,7 @@
             [shader("closesthit")]
             void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
             {
-              rayIntersection.color = _Color;
+                rayIntersection.color = _Color;
             }
 
             ENDHLSL

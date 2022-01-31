@@ -1,8 +1,9 @@
-﻿Shader "Tutorial/Diffuse"
+﻿Shader "Tutorial/Metal"
 {
     Properties
     {
-        _Color ("Main Color", Color) = (1,1,1,1)
+        _Color ("Main Color", Color) = (1, 1, 1, 1)
+        _Fuzz ("Fuzz", float) = 0
     }
     SubShader
     {
@@ -78,6 +79,7 @@
 
             CBUFFER_START(UnityPerMaterial)
             float4 _Color;
+            float _Fuzz;
             CBUFFER_END
 
             void FetchIntersectionVertex(uint vertexIndex, out IntersectionVertex outVertex)
@@ -115,9 +117,12 @@
                     float3 positionWS = origin + direction * t;
 
                     // Make reflection ray.
+                    float3 reflectDir = reflect(direction, normalWS);
+                    if (dot(reflectDir, normalWS) < 0.0f)
+                        reflectDir = direction;
                     RayDesc rayDescriptor;
-                    rayDescriptor.Origin = positionWS + 0.001f * normalWS;
-                    rayDescriptor.Direction = normalize(normalWS + GetRandomOnUnitSphere(rayIntersection.PRNGStates));
+                    rayDescriptor.Origin = positionWS + 0.001f * reflectDir;
+                    rayDescriptor.Direction = reflectDir + _Fuzz * GetRandomOnUnitSphere(rayIntersection.PRNGStates);
                     rayDescriptor.TMin = 1e-5f;
                     rayDescriptor.TMax = _CameraFarDistance;
 
@@ -133,7 +138,7 @@
                     color = reflectionRayIntersection.color;
                 }
 
-                rayIntersection.color = _Color * 0.5f * color;
+                rayIntersection.color = _Color * color;
             }
 
             ENDHLSL

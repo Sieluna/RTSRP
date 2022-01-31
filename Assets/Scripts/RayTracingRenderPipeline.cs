@@ -8,17 +8,17 @@ public class RayTracingRenderPipeline : RenderPipeline
 {
     public static readonly int s_AccelerationStructure = Shader.PropertyToID("_AccelerationStructure");
 
-    private readonly RayTracingRenderPipelineAsset m_Asset;
+    private readonly RayTracingRenderPipelineAsset m_PipelineAsset;
     private readonly Dictionary<int, ComputeBuffer> m_PRNGStates = new();
     private RayTracingAccelerationStructure m_AccelerationStructure;
     private RayTracingTutorial m_Tutorial;
 
     public RayTracingRenderPipeline(RayTracingRenderPipelineAsset asset)
     {
-        m_Asset = asset;
+        m_PipelineAsset = asset;
         m_AccelerationStructure = new RayTracingAccelerationStructure();
 
-        m_Tutorial = m_Asset.TutorialAsset.CreateTutorial();
+        m_Tutorial = m_PipelineAsset.TutorialAsset.CreateTutorial();
         if (m_Tutorial is null)
         {
             Debug.LogError("Can't create tutorial.");
@@ -32,7 +32,10 @@ public class RayTracingRenderPipeline : RenderPipeline
         }
     }
 
-    public RayTracingAccelerationStructure RequestAccelerationStructure() => m_AccelerationStructure;
+    public RayTracingAccelerationStructure RequestAccelerationStructure()
+    {
+        return m_AccelerationStructure;
+    }
 
     public ComputeBuffer RequirePRNGStates(Camera camera)
     {

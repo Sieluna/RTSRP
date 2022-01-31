@@ -6,8 +6,5 @@ public class RayTracingRenderPipelineAsset : RenderPipelineAsset
 {
     public RayTracingTutorialAsset TutorialAsset;
 
-    protected override RenderPipeline CreatePipeline()
-    {
-        return new RayTracingRenderPipeline(this);
-    }
+    protected override RenderPipeline CreatePipeline() => new RayTracingRenderPipeline(this);
 }

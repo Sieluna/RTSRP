@@ -1,8 +1,9 @@
-﻿Shader "Tutorial/Diffuse"
+﻿Shader "Tutorial/Dielectrics"
 {
     Properties
     {
         _Color ("Main Color", Color) = (1,1,1,1)
+        _IOR ("IOR", float) = 1.5
     }
     SubShader
     {
@@ -78,6 +79,7 @@
 
             CBUFFER_START(UnityPerMaterial)
             float4 _Color;
+            float _IOR;
             CBUFFER_END
 
             void FetchIntersectionVertex(uint vertexIndex, out IntersectionVertex outVertex)
@@ -85,8 +87,16 @@
                 outVertex.normalOS = UnityRayTracingFetchVertexAttribute3(vertexIndex, kVertexAttributeNormal);
             }
 
+            inline float schlick(float cosine, float IOR)
+            {
+                float r0 = (1.0f - IOR) / (1.0f + IOR);
+                r0 = r0 * r0;
+                return r0 + (1.0f - r0) * pow((1.0f - cosine), 5.0f);
+            }
+
             [shader("closesthit")]
-            void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
+            void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload,
+                                            AttributeData attributeData : SV_IntersectionAttributes)
             {
                 // Fetch the indices of the currentr triangle
                 uint3 triangleIndices = UnityRayTracingFetchTriangleIndices(PrimitiveIndex());
@@ -114,10 +124,34 @@
                     float t = RayTCurrent();
                     float3 positionWS = origin + direction * t;
 
-                    // Make reflection ray.
+                    // Make reflection & refraction ray.
+                    float3 outwardNormal;
+                    float niOverNt;
+                    float reflectProb;
+                    float cosine;
+                    if (dot(-direction, normalWS) > 0.0f)
+                    {
+                        outwardNormal = normalWS;
+                        niOverNt = 1.0f / _IOR;
+                        cosine = _IOR * dot(-direction, normalWS);
+                    }
+                    else
+                    {
+                        outwardNormal = -normalWS;
+                        niOverNt = _IOR;
+                        cosine = -dot(-direction, normalWS);
+                    }
+                    reflectProb = schlick(cosine, _IOR);
+
+                    float3 scatteredDir;
+                    if (GetRandomValue(rayIntersection.PRNGStates) < reflectProb)
+                        scatteredDir = reflect(direction, normalWS);
+                    else
+                        scatteredDir = refract(direction, outwardNormal, niOverNt);
+
                     RayDesc rayDescriptor;
-                    rayDescriptor.Origin = positionWS + 0.001f * normalWS;
-                    rayDescriptor.Direction = normalize(normalWS + GetRandomOnUnitSphere(rayIntersection.PRNGStates));
+                    rayDescriptor.Origin = positionWS + 1e-5f * scatteredDir;
+                    rayDescriptor.Direction = scatteredDir;
                     rayDescriptor.TMin = 1e-5f;
                     rayDescriptor.TMax = _CameraFarDistance;
 
@@ -127,13 +161,13 @@
                     reflectionRayIntersection.PRNGStates = rayIntersection.PRNGStates;
                     reflectionRayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-                    TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, reflectionRayIntersection);
+                    TraceRay(_AccelerationStructure, RAY_FLAG_NONE, 0xFF, 0, 1, 0, rayDescriptor, reflectionRayIntersection);
 
                     rayIntersection.PRNGStates = reflectionRayIntersection.PRNGStates;
                     color = reflectionRayIntersection.color;
                 }
 
-                rayIntersection.color = _Color * 0.5f * color;
+                rayIntersection.color = _Color * color;
             }
 
             ENDHLSL
