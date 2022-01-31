@@ -26,8 +26,16 @@ Unity RTX On!
     - [3.3. Rendering in C# using the SRP Pipeline](#33-rendering-in-c-using-the-srp-pipeline)
     - [3.4. Final Output](#34-final-output)
   - [4. Rendering the normal](#4-rendering-the-normal)
-     - [4.1. Creating the Sphere Shader](#41-creating-the-sphere-shader)
-     - [4.2. Final Output](#42-final-output)
+    - [4.1. Creating the Sphere Shader](#41-creating-the-sphere-shader)
+    - [4.2. Final Output](#42-final-output)
+  - [5. Antialiasing](#5-antialiasing)
+    - [5.1. Create a RayTraceShader in Unity](#51-create-a-raytraceshader-in-unity)
+    - [5.2. Rendering in C# using the SRP Pipeline](#52-rendering-in-c-using-the-srp-pipeline)
+    - [5.3. Final Output](#53-final-output)
+  - [6. Diffuse Material](#6-diffuse-material)
+    - [6.1. Create a RayTraceShader in Unity](#61-create-a-raytraceshader-in-unity)
+    - [6.2. Creating the Object Shader](#62-creating-the-object-shader)
+    - [6.3. Final Output](#63-final-output)
 
 ## Overview
 
@@ -374,7 +382,7 @@ The following C# code is used in the SRP pipeline:
 ```csharp
 var outputTarget = RequireOutputTarget(camera);
 
-var accelerationStructure = m_Pipeline.AccelerationStructure;
+var accelerationStructure = m_Pipeline.RequestAccelerationStructure();
 
 var cmd = CommandBufferPool.Get(nameof(CreateSphereTutorial));
 try
@@ -414,6 +422,77 @@ This section is a modification of the routine from section 4, with the only
 change being the shader for the object itself.
 
 ### 4.1. Creating the Sphere Shader
+
+```glsl
+struct RayIntersection
+{
+  float4 color;
+};
+
+struct IntersectionVertex
+{
+  // Object space normal of the vertex
+  float3 normalOS;
+};
+
+void FetchIntersectionVertex(uint vertexIndex, out IntersectionVertex outVertex)
+{
+  outVertex.normalOS = UnityRayTracingFetchVertexAttribute3(vertexIndex, kVertexAttributeNormal);
+}
+
+[shader("closesthit")]
+void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
+{
+  // Fetch the indices of the currentr triangle
+  uint3 triangleIndices = UnityRayTracingFetchTriangleIndices(PrimitiveIndex());
+
+  // Fetch the 3 vertices
+  IntersectionVertex v0, v1, v2;
+  FetchIntersectionVertex(triangleIndices.x, v0);
+  FetchIntersectionVertex(triangleIndices.y, v1);
+  FetchIntersectionVertex(triangleIndices.z, v2);
+
+  // Compute the full barycentric coordinates
+  float3 barycentricCoordinates = float3(1.0 - attributeData.barycentrics.x - attributeData.barycentrics.y, attributeData.barycentrics.x, attributeData.barycentrics.y);
+
+  float3 normalOS = INTERPOLATE_RAYTRACING_ATTRIBUTE(v0.normalOS, v1.normalOS, v2.normalOS, barycentricCoordinates);
+  float3x3 objectToWorld = (float3x3)ObjectToWorld3x4();
+  float3 normalWS = normalize(mul(objectToWorld, normalOS));
+
+  rayIntersection.color = float4(0.5f * (normalWS + 1.0f), 0);
+}
+```
+
+* **UnityRayTracingFetchTriangleIndices** is a Unity utility function used to
+  obtain the indices of the triangle that the ray intersects, based on the index
+  information returned by *PrimitiveIndex*.
+* The **IntersectionVertex** structure defines the vertex information of the
+  intersected triangle that we are interested in during ray tracing
+* The **FetchIntersectionVertex** function populates the *IntersectionVertex*
+  data by internally calling the *UnityRayTracingFetchVertexAttribute3* function,
+  a Unity utility function, to retrieve the vertex data. In this case, the
+  Object Space normal of the vertex is obtained.
+* **INTERPOLATE_RAYTRACING_ATTRIBUTE** is used to interpolate between the three
+  vertices of the intersected triangle to compute the intersection point’s data.
+
+### 4.2. Final Output
+
+![Normal Sphere](Images/4_NormalAsColor1.png)
+
+## 5. Antialiasing
+
+**Tutorial Class**: AntialiasingTutorial
+
+**Scene File**: AntialiasingTutorialScene
+
+When zooming in on the final output image from section 5, you can observe
+significant aliasing issues.
+
+![Before Antialiasing](Images/5_Antialiasing1.png)
+
+In this example, the Accumulate Average Sample method is used instead.
+
+### 5.1. Create a RayTraceShader in Unity
 
 ```glsl
 struct RayIntersection
@@ -475,19 +554,151 @@ void AntialiasingRayGenShader()
 }
 ```
 
-* **UnityRayTracingFetchTriangleIndices** is a Unity utility function used to
-  obtain the indices of the triangle that the ray intersects, based on the index
-  information returned by *PrimitiveIndex*.
-* The **IntersectionVertex** structure defines the vertex information of the
-  intersected triangle that we are interested in during ray tracing
-* The **FetchIntersectionVertex** function populates the *IntersectionVertex*
-  data by internally calling the *UnityRayTracingFetchVertexAttribute3* function,
-  a Unity utility function, to retrieve the vertex data. In this case, the
-  Object Space normal of the vertex is obtained.
-* **INTERPOLATE_RAYTRACING_ATTRIBUTE** is used to interpolate between the three
-  vertices of the intersected triangle to compute the intersection point’s data.
+The GenerateCameraRayWithOffset function applies an offset to the ray generated
+for the pixel, with the offset value provided by GetRandomValue.
 
-### 4.2. Final Output
+The _FrameIndex represents the index of the current frame being rendered. If
+this value is greater than 1, the current frame data is averaged with previous
+frames; otherwise, the current frame data is directly written to the render
+target.
 
-![Normal Sphere](Images/4_NormalAsColor1.png)
+### 5.2. Rendering in C# using the SRP Pipeline
 
+```csharp
+var outputTarget = RequireOutputTarget(camera);
+var outputTargetSize = RequireOutputTargetSize(camera);
+
+var accelerationStructure = m_Pipeline.RequestAccelerationStructure();
+var PRNGStates = m_Pipeline.RequirePRNGStates(camera);
+
+var cmd = CommandBufferPool.Get(typeof(OutputColorTutorial).Name);
+try
+{
+  if (m_FrameIndex < 1000)
+  {
+    using (new ProfilingSample(cmd, "RayTracing"))
+    {
+      cmd.SetRayTracingShaderPass(m_Shader, "RayTracing");
+      cmd.SetRayTracingAccelerationStructure(m_Shader, RayTracingRenderPipeline.s_AccelerationStructure, accelerationStructure);
+      cmd.SetRayTracingIntParam(m_Shader, s_FrameIndex, m_FrameIndex);
+      cmd.SetRayTracingBufferParam(m_Shader, s_PRNGStates, PRNGStates);
+      cmd.SetRayTracingTextureParam(m_Shader, s_OutputTarget, outputTarget);
+      cmd.SetRayTracingVectorParam(m_Shader, s_OutputTargetSize, outputTargetSize);
+      cmd.DispatchRays(m_Shader, "AntialiasingRayGenShader", (uint) outputTarget.rt.width, (uint) outputTarget.rt.height, 1, camera);
+    }
+    context.ExecuteCommandBuffer(cmd);
+    if (camera.cameraType == CameraType.Game)
+      m_FrameIndex++;
+  }
+
+  using (new ProfilingSample(cmd, "FinalBlit"))
+  {
+    cmd.Blit(outputTarget, BuiltinRenderTextureType.CameraTarget, Vector2.one, Vector2.zero);
+  }
+  context.ExecuteCommandBuffer(cmd);
+}
+finally
+{
+  CommandBufferPool.Release(cmd);
+}
+```
+
+The **RequireOutputTargetSize** function retrieves the current render target's
+size.
+
+The **RequirePRNGStates** function retrieves the buffer for the random number
+generator state.
+
+The **_frameIndex** indicates the index of the current frame being rendered.
+Rendering stops after accumulating 1000 frames.
+
+### 5.3. Final Output
+
+![After Antialiasing](Images/5_Antialiasing2.png)
+
+## 6. Diffuse Material
+
+**Tutorial Class**: AntialiasingTutorial
+
+**Scene File**: DiffuseTutorialScene
+
+For the implementation of Diffuse, refer to the original text.
+
+### 6.1. Create a RayTraceShader in Unity
+
+The code is mostly the same as the previous section, with the addition of the
+remainingDepth field in the Ray Payload to track how many recursions remain.
+The maximum recursion count is set by MAX_DEPTH. The value of MAX_DEPTH must be
+less than max_recursion_depth minus 1.
+
+```glsl
+RayIntersection rayIntersection;
+rayIntersection.remainingDepth = MAX_DEPTH - 1;
+rayIntersection.PRNGStates = PRNGStates;
+rayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, rayIntersection);
+PRNGStates = rayIntersection.PRNGStates;
+finalColor += rayIntersection.color;
+```
+
+### 6.2. Creating the Object Shader
+
+Here is the code for the **ClosestHitShader**:
+
+```glsl
+[shader("closesthit")]
+void ClosestHitShader(inout RayIntersection rayIntersection : SV_RayPayload, AttributeData attributeData : SV_IntersectionAttributes)
+{
+  // Fetch the indices of the currentr triangle
+  // Fetch the 3 vertices
+  // Compute the full barycentric coordinates
+  // Get normal in world space.
+  ...
+  float3 normalWS = normalize(mul(objectToWorld, normalOS));
+
+  float4 color = float4(0, 0, 0, 1);
+  if (rayIntersection.remainingDepth > 0)
+  {
+    // Get position in world space.
+    float3 origin = WorldRayOrigin();
+    float3 direction = WorldRayDirection();
+    float t = RayTCurrent();
+    float3 positionWS = origin + direction * t;
+
+    // Make reflection ray.
+    RayDesc rayDescriptor;
+    rayDescriptor.Origin = positionWS + 0.001f * normalWS;
+    rayDescriptor.Direction = normalize(normalWS + GetRandomOnUnitSphere(rayIntersection.PRNGStates));
+    rayDescriptor.TMin = 1e-5f;
+    rayDescriptor.TMax = _CameraFarDistance;
+
+    // Tracing reflection.
+    RayIntersection reflectionRayIntersection;
+    reflectionRayIntersection.remainingDepth = rayIntersection.remainingDepth - 1;
+    reflectionRayIntersection.PRNGStates = rayIntersection.PRNGStates;
+    reflectionRayIntersection.color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    TraceRay(_AccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 1, 0, rayDescriptor, reflectionRayIntersection);
+
+    rayIntersection.PRNGStates = reflectionRayIntersection.PRNGStates;
+    color = reflectionRayIntersection.color;
+  }
+
+  rayIntersection.color = _Color * 0.5f * color;
+}
+```
+
+The method for calculating normalWS (world-space normal) is the same as in the
+previous section and is omitted here.
+
+If rayIntersection.remainingDepth is greater than 0, the Diffuse calculation is
+performed using the method from the original text, and TraceRay is called again
+for recursive ray tracing.
+
+The GetRandomOnUnitSphere function returns a randomly distributed vector on the
+unit sphere.
+
+### 6.3. Final Output
+
+![Diffuse](Images/6_Diffuse1.png)

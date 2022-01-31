@@ -13,8 +13,6 @@ public class RayTracingRenderPipeline : RenderPipeline
     private RayTracingAccelerationStructure m_AccelerationStructure;
     private RayTracingTutorial m_Tutorial;
 
-    public RayTracingAccelerationStructure AccelerationStructure => m_AccelerationStructure;
-
     public RayTracingRenderPipeline(RayTracingRenderPipelineAsset asset)
     {
         m_Asset = asset;
@@ -32,6 +30,28 @@ public class RayTracingRenderPipeline : RenderPipeline
             m_Tutorial = null;
             Debug.LogError("Initialize tutorial failed.");
         }
+    }
+
+    public RayTracingAccelerationStructure RequestAccelerationStructure() => m_AccelerationStructure;
+
+    public ComputeBuffer RequirePRNGStates(Camera camera)
+    {
+        var id = camera.GetInstanceID();
+        if (m_PRNGStates.TryGetValue(id, out var buffer))
+            return buffer;
+
+        buffer = new ComputeBuffer(camera.pixelWidth * camera.pixelHeight, 4 * 4, ComputeBufferType.Structured, ComputeBufferMode.Immutable);
+
+        var mt = new MersenneTwister();
+        mt.InitGenRand((uint) DateTime.Now.Ticks);
+
+        var data = new uint[camera.pixelWidth * camera.pixelHeight * 4];
+        for (var i = 0; i < camera.pixelWidth * camera.pixelHeight * 4; ++i)
+            data[i] = mt.GenRandInt32();
+        buffer.SetData(data);
+
+        m_PRNGStates.Add(id, buffer);
+        return buffer;
     }
 
     protected override void Render(ScriptableRenderContext context, Camera[] cameras)

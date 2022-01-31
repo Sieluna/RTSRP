@@ -10,7 +10,7 @@ public class CreateSphereTutorial : RayTracingTutorial
         base.Render(context, camera);
         var outputTarget = RequireOutputTarget(camera);
 
-        var accelerationStructure = m_Pipeline.AccelerationStructure;
+        var accelerationStructure = m_Pipeline.RequestAccelerationStructure();
 
         var cmd = CommandBufferPool.Get(nameof(CreateSphereTutorial));
         try
